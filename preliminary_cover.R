@@ -47,22 +47,50 @@ ggplot(subset(sppdat, func == "Grass" & growth == "Perennial" & maxcover > 15), 
 
 ## Focal species driving the patterns ##
 # Southern pattern driven 
-ggplot(subset(sppdat, species == "Schedonorus arundinaceus"), aes(x=treatment, y=cover)) +geom_boxplot() +
-  facet_wrap(~Site)
 
-ggplot(subset(sppdat, species == "Agrostis capillaris"), aes(x=treatment, y=cover)) +geom_boxplot() +
-  facet_wrap(~Site)
+ggplot(subset(sppdat,func == "Grass" & growth == "Perennial" & maxcover > 15), aes(x=treatment, y=cover)) +geom_boxplot() +
+  facet_grid(Site~species, scales = "free")
 
-ggplot(subset(sppdat, species == "Alopecurus pratensis"), aes(x=treatment, y=cover)) +geom_boxplot() +
-  facet_wrap(~Site)
+# ggplot(subset(sppdat, species == "Schedonorus arundinaceus"), aes(x=treatment, y=cover)) +geom_boxplot() +
+#   facet_wrap(~Site)
+# 
+# ggplot(subset(sppdat, species == "Agrostis capillaris"), aes(x=treatment, y=cover)) +geom_boxplot() +
+#   facet_wrap(~Site)
+# 
+# ggplot(subset(sppdat, species == "Alopecurus pratensis"), aes(x=treatment, y=cover)) +geom_boxplot() +
+#   facet_wrap(~Site)
+
 
 
 ## Elymus doesn't care 
-ggplot(subset(sppdat, species == "Elymus repens"), aes(x=treatment, y=cover)) +geom_boxplot() +
-  facet_wrap(~Site)
+# ggplot(subset(sppdat, species == "Elymus repens"), aes(x=treatment, y=cover)) +geom_boxplot() +
+#   facet_wrap(~Site)
 
 
 ## Perennial forbs ##
 
 ggplot(subset(sppdat, func == "Forb" & growth == "Perennial" & maxcover > 15), aes(x=Site, y=cover)) +geom_boxplot() +
   facet_wrap(~species)
+
+ggplot(subset(sppdat,func == "Forb" & growth == "Perennial" & maxcover > 15), aes(x=treatment, y=cover)) +geom_boxplot() +
+  facet_grid(Site~species, scales = "free")
+
+
+
+## Annual forbs ##
+# not much doing, galium doesn't love drought 
+
+ggplot(subset(sppdat,func == "Forb" & growth == "Annual" & maxcover > 15), aes(x=treatment, y=cover)) +geom_boxplot() +
+  facet_grid(Site~species, scales = "free")
+
+
+## Annual grasses ##
+
+ggplot(subset(sppdat,func == "Grass" & growth == "Annual"), aes(x=treatment, y=cover)) +geom_boxplot() +
+  facet_grid(Site~species, scales = "free")
+
+ggplot(subset(sppdat, species == "Bromus tectorum"), aes(x=treatment, y=cover)) +geom_boxplot() +
+  facet_grid(~Site, scales = "free")
+
+
+
