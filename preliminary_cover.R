@@ -48,7 +48,7 @@ ggplot(subset(sppdat, func == "Grass" & growth == "Perennial" & maxcover > 15), 
 ## Focal species driving the patterns ##
 # Southern pattern driven 
 
-ggplot(subset(sppdat,func == "Grass" & growth == "Perennial" & maxcover > 15), aes(x=treatment, y=cover)) +geom_boxplot() +
+ggplot(subset(sppdat,func == "Grass" & growth == "Perennial" & maxcover > 5), aes(x=treatment, y=cover)) +geom_boxplot() +
   facet_grid(Site~species, scales = "free")
 
 # ggplot(subset(sppdat, species == "Schedonorus arundinaceus"), aes(x=treatment, y=cover)) +geom_boxplot() +
@@ -72,7 +72,7 @@ ggplot(subset(sppdat,func == "Grass" & growth == "Perennial" & maxcover > 15), a
 ggplot(subset(sppdat, func == "Forb" & growth == "Perennial" & maxcover > 15), aes(x=Site, y=cover)) +geom_boxplot() +
   facet_wrap(~species)
 
-ggplot(subset(sppdat,func == "Forb" & growth == "Perennial" & maxcover > 15), aes(x=treatment, y=cover)) +geom_boxplot() +
+ggplot(subset(sppdat,func == "Forb" & growth == "Perennial" & maxcover > 5), aes(x=treatment, y=cover)) +geom_boxplot() +
   facet_grid(Site~species, scales = "free")
 
 
@@ -80,7 +80,7 @@ ggplot(subset(sppdat,func == "Forb" & growth == "Perennial" & maxcover > 15), ae
 ## Annual forbs ##
 # not much doing, galium doesn't love drought 
 
-ggplot(subset(sppdat,func == "Forb" & growth == "Annual" & maxcover > 15), aes(x=treatment, y=cover)) +geom_boxplot() +
+ggplot(subset(sppdat,func == "Forb" & growth == "Annual" & maxcover > 5), aes(x=treatment, y=cover)) +geom_boxplot() +
   facet_grid(Site~species, scales = "free")
 
 
