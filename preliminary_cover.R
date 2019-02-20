@@ -9,20 +9,21 @@ theme_set(theme_bw(base_size = 16) + theme(text = element_text(size = 20)) +
                   panel.border = element_rect(colour = "black")))
 
 ### READ IN AND CLEAN THE DATA ###
-funcdat0 <- read_csv("Data/PI_DATA_2018-04-06.csv")[1:3,] %>%
+funcdat0 <- read_csv("PI_DATA_2018-04-06.csv")[1:3,] %>%
   select(-c(X1:X4)) 
 
 funcdat <- as_tibble(t(funcdat0)) 
 names(funcdat) = c("growth", "func", "species")
 
-sppdat0 <- read_csv("Data/PI_DATA_2018-04-06.csv", skip = 3) %>%
+sppdat0 <- read_csv("PI_DATA_2018-04-06.csv", skip = 3) %>%
   mutate(Site = factor(Site, levels = c("Southern", "Central", "Northern"))) %>%
   gather("species", "cover", 5:107) %>%
   mutate(cover = parse_number(cover)) %>%
   mutate(treatment = `Climate Treatment`) %>%
   filter(!species%in% c("Total Cover", "Unknown sample 12", "Unknown sample 6 (forb)")) %>%
   group_by(species) %>%
-  mutate(maxcover = max(cover))
+  mutate(maxcover = max(cover)) %>%
+  filter(Experiment == "HOPS")
 
 sppdat <- left_join(sppdat0, funcdat)
 
