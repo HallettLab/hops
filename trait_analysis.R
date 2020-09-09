@@ -223,10 +223,10 @@ ggplot(seedbyspec, aes(species, seedperpound)) +geom_bar(stat="identity") +
 
 
 ### Method 2: PCA
-tog0 <- leafbyspec %>%
-  select(-errorsla)
-tog1 <- heightbyspec %>%
-  select(-errorheight)
+tog0 <- leafbyspec #%>%
+#  select(-errorsla)
+tog1 <- heightbyspec# %>%
+ # select(-errorheight)
 tog2 <-seedbyspec %>%
   select(-fullname) %>%
   mutate(CON="Control", PREC="Warming+Precip", WARM="Warming", DRO="Drought") %>%
@@ -256,15 +256,12 @@ Y<-as.tibble(Y)
 Y$rowid  <- 1:nrow(Y)
 
 tog<-left_join(tog, Y, by="rowid") %>%
-  select(-rowid, -meansla.x, -meanheight.x, -seedperpound.x)
+  select(-rowid, -meansla.x, -meanheight.x, -seedperpound.x, -DRO)
 names(tog) <- c("species", "site", "treatment", "sla", "height", "seedmass")
 rm(Y)
 
 trait.rda <- rda(tog[4:6])
-biplot(trait.rda,
-       display = c("sites", 
-                   "species"),
-       type = c("points"))
+biplot(trait.rda)
 ordihull(trait.rda,
          group = tog$species)
 
@@ -275,13 +272,16 @@ ordihull(nona.rda,
 
 colors <- c("red", "blue", "green", "purple", "brown", "orange", "magenta")
 colors <- colors[as.factor(tognona$species)]
-scatterplot3d(tognona[4:6], color=colors, pch=20, label.tick.marks=FALSE, box=FALSE)
 
 colors2<- c("red", "blue", "green", "purple", "brown", "orange", "magenta", "yellow", "grey", "black")
-colors2 <- colors[as.factor(tog$species)]
+colors2 <- colors2[as.factor(tog$species)]
 scatterplot3d(tog[4:6], color=colors2, pch=20, label.tick.marks=FALSE, box=FALSE)
 
+ggplot(tog, aes(meansla, meanheight)) +geom_point(aes(color=species)) + theme_classic() + ylab("Mean Height (mm)") +xlab("Mean SLA (cm2/g)")
 
+ggplot(tog) +geom_point(aes(meansla, meanheight, color=species, shape=treatment)) + facet_wrap(~site)
+  theme_classic() + ylab("Mean Height (mm)") +xlab("Mean SLA (cm2/g)")
+  
 ##########################################################
 ### 2a. Species means shift in a predictable direction? ###
 ##########################################################
@@ -329,4 +329,5 @@ ggplot(subset(tog, species=="SIDMAL"), aes(treatment, avgheight)) + geom_bar(sta
 
 ggplot(subset(tog, species=="PLECON"), aes(treatment, avgheight)) + geom_bar(stat="identity") +facet_wrap(~site) +
   geom_errorbar(aes(ymin=(avgheight-SEheight), ymax=(avgheight+SEheight)))
+
 
