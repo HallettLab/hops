@@ -261,7 +261,7 @@ vegtog_survival_spread<-vegtog_survival%>%
 # visualize % survival by species, site, burn, warm
 
 #### FIGURE 4a: SURVIVAL BY SITE 2019   ####
-ggplot(subset(vegtog_survival, func=="Native Perennial Grasses"|func=="Pasture Grasses"), aes(x=burntrt, y=survival, fill=burntrt))+
+f5a<-ggplot(subset(vegtog_survival, func=="Native Perennial Grasses"|func=="Pasture Grasses"), aes(x=burntrt, y=survival, fill=burntrt))+
   geom_jitter(size=.5, color="grey")+
    geom_boxplot() + facet_grid(func~site, scales="free") +
   scale_fill_manual(labels=c("Unburned", "Burned", "Unburned, Warmed", "Burned, Warmed"), 
@@ -468,14 +468,54 @@ eug.shannon<-left_join(eug.shannon, community_diversity(eug.shannon, abundance.v
     gather(metric, value, richness, abundance, Shannon)
    
 ######### FIGURE 4B: RESTO seedling diversity ####
-  ggplot(subset(eug.shannon, metric!="richness"), aes(x=burntrt, y=value))+
+  f5b<-ggplot(subset(eug.shannon, metric!="richness"), aes(x=burntrt, y=value))+
   geom_jitter(size=.5, color="grey")+
   geom_boxplot(aes(fill=burntrt))+  facet_grid(metric~site, scales="free")+
   scale_fill_manual(labels=c("Unburned", "Burned"), 
                     values=c("dodgerblue", "brown2"))+
   theme(axis.title.x=element_blank(),
         axis.text.x=element_blank(),
-        axis.ticks.x=element_blank(), legend.title=(element_blank()))+theme(text=element_text(size=15))+ylab("")
+        axis.ticks.x=element_blank(), legend.title=(element_blank()))+theme(text=element_text(size=15))+ylab("space")
+  
+  ggarrange(f5a, f5b, nrow=2, ncol=1, common.legend = T)
+#combine figures 4 a and b
+figure5<-vegtog_survival%>%
+ ungroup()%>%
+  select(plot, sub, micro, site, burntrt, func, survival)%>%
+  filter(func=="Native Perennial Grasses"|func=="Pasture Grasses" )%>%
+  mutate(metric=func, value=survival)%>%
+  dplyr::select(-func, -survival)
+
+figure5<-rbind(figure5, ungroup(eug.shannon))%>%
+  filter(metric!="richness")
+figure5$metric<-factor(figure5$metric, levels=c("Native Perennial Grasses", "Pasture Grasses", "abundance", "Shannon"))
+
+ggplot(subset(figure5, metric!="richness"), aes(x=burntrt, y=value))+
+  geom_jitter(size=.5, color="grey")+
+  geom_boxplot(aes(fill=burntrt))+  facet_grid(metric~site, scales="free")+
+  scale_fill_manual(labels=c("Unburned", "Burned"), 
+                    values=c("dodgerblue", "brown2"))+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(), legend.title=(element_blank()))+theme(text=element_text(size=15))+ylab("")+ geom_hline(yintercept=0)
+
+figure5.cluster<-figure5%>%
+  group_by(plot, sub, site, burntrt, metric)%>%
+  summarize(mvalue=mean(value))%>%
+  ungroup()%>%
+  mutate(plot=as.numeric(plot))%>%
+  mutate(burntrt=ifelse(burntrt=="Not Burned", "NotBurned", "Burned"))
+figure5.cluster1<-left_join(figure5.cluster, select(wide_clusters1, groups, (plot), burntrt))
+
+ggplot(subset(figure5.cluster1, metric!="richness"), aes(x=burntrt, y=mvalue))+
+  geom_jitter(size=.5, color="grey")+
+  geom_boxplot(aes(fill=burntrt))+  facet_grid(metric~groups*site, scales="free")+
+  scale_fill_manual( 
+                    values=c("dodgerblue", "brown2"))+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(), legend.title=(element_blank()))+theme(text=element_text(size=15))+ylab("")+ geom_hline(yintercept=0)
+
 
 ###STAT RESTO MIX ####
 eug_shan2<-eug.shannon%>%
@@ -598,10 +638,9 @@ ggplot(subset(vegtog_survival_agg, longevity=="p"&type=="g"&native!="California 
   geom_smooth(method = "glm", 
               method.args = list(family = "binomial"), formula = cbind(succ, fail) ~ x, color="black", se=T) + xlab("Litter volume (cover*depth)")+
   scale_color_manual(labels=c("Unburned", "Burned"), 
-                    values=c("dodgerblue", "brown2"))+theme(text=element_text(size=20),axis.text.x=element_blank(),
+                    values=c("dodgerblue", "brown2"))+theme(text=element_text(size=17),axis.text.x=element_blank(),
                                                            axis.ticks.x=element_blank(), 
-                                                           legend.title=(element_blank()))+
-  labs(y="Seedling survival")
+                                                           legend.title=(element_blank()))+labs(y="Seedling survival")
 glmdata<-vegtog_survival_agg%>%
   mutate(lvol=perl(talll))
 mod <- glm(cbind(success, failure) ~ (perl*talll),family='binomial',data=subset(vegtog_survival_agg, native=="Pasture Grasses"&site=="Northern"), na.action=na.exclude)
@@ -659,7 +698,7 @@ y<-agnes(wide_dist, method="complete")
 plot(x)
 pltree(y, cex = 0.6, hang = -1, main = "Dendrogram of agnes")
 
-fviz_nbclust(as.matrix(wide_dist), FUN = hcut, method="gap_stat")
+fviz_nbclust(as.matrix(wide_dist), FUN = hcut, method="wss")
 
 groups<-cutree(x, k=4)
 
@@ -672,26 +711,30 @@ wide_clusters1<-wide_clusters%>%
   mutate(site=ifelse(plot<21, "southern", "central"))%>%
   mutate(site=ifelse(plot>40, "northern", site))%>%
   mutate(groups=as.factor(groups))%>%
-  mutate(groups=ifelse(groups==1, "more ann. grasses", ifelse(groups==2, "ann. grasses dominant", ifelse(groups==4, "forbs and per. grasses", "more forbs"))))
+  mutate(groups=ifelse(groups==1, "More Annuals", ifelse(groups==2, "Annuals Dominant", ifelse(groups==4, "Forbs and Perennials", "Forbs"))))
 
 wide_clusters1$site<-factor(wide_clusters1$site, levels=c("southern", 
                                           "central", 
                                           "northern"))
-wide_clusters1$groups<-factor(wide_clusters1$groups, levels=c("more forbs", 
-                                                          "forbs and per. grasses", 
-                                                          "more ann. grasses", "ann. grasses dominant"))
+wide_clusters1$groups<-factor(wide_clusters1$groups, levels=c("Forbs", 
+                                                          "Forbs and Perennials", 
+                                                          "More Annuals", "Annuals Dominant"))
 wide_clusters1$burntrt<-factor(wide_clusters1$burntrt, levels=c("NotBurned", "Burned"))
 
 ### Question 1: Figure 1: Cluster Characterization (2019 Only) ####
 ### characterize clusters
 cluster_char<-wide_clusters1%>%
   gather(fg, cover, ag, pg, f)
+cluster_char$fg<-factor(cluster_char$fg, levels=c("f", "pg", "ag"))
 
+means<-cluster_char%>%
+  group_by(groups, fg)%>%
+  summarize(mean=mean(cover), se=calcSE(cover))
 
 ### PUBLICATION FIGURE 1
-f1b<-ggplot(cluster_char, aes(x=groups, y=cover))+geom_boxplot(aes(fill=fg))  +
-  scale_fill_manual(labels=c("annual grasses", "forbs", "perennial grasses"), 
-                         values=c("goldenrod2", "royalblue3", "chartreuse4"  ))+
+ggplot(cluster_char, aes(x=groups, y=cover))+geom_boxplot(aes(fill=fg))  +
+  scale_fill_manual(labels=c("forbs", "perennial grasses", "annual grasses"), 
+                         values=c("gray25", "gray55", "gray90"))+
   theme(axis.title.x=element_blank(),
         axis.ticks.x=element_blank(), legend.title=(element_blank()), text=element_text(size=20)) +ylab("Mean Sublot % Cover")
 
@@ -780,7 +823,7 @@ ggplot() +
  # scale_colour_manual(values=c("gray50", "gray80", "black")) +
   scale_shape_manual(values=c(1, 16))+
   coord_equal() +
-  scale_color_manual(values=c("tan","grey50" , "royalblue3","goldenrod2","chartreuse4", "gray80",  "black"))+
+  scale_color_manual(values=c("tan","grey50" , "royalblue3","chartreuse4","goldenrod2", "gray80",  "black"))+
   geom_text(data=species.scores,aes(x=NMDS1,y=NMDS2,label=species), size=4) +
   theme_bw()+xlab("NMDS 1")+ylab("NMDS 2")+
   geom_segment(aes(x=arrows.warm$x_control, y=arrows.warm$y_control, 
@@ -801,45 +844,38 @@ adonis(wide_composition_rel ~ site+burntrt, data=wcrel2, perm=1e3) # nothing sig
 
 ### Question 1: Figure 2: RIVER PLOTS (2019 Only)####
 library(ggalluvial)
-ggplot(wide_clusters1, aes(x=burntrt, stratum=groups, alluvium=plot, 
-                            fill=groups, label=groups))+
-  geom_flow()+
-  scale_x_discrete(expand = c(.1, .1))+
-  geom_stratum(alpha=.5)+
-  geom_text(stat="stratum", size=5)+
-  scale_fill_manual(values=c("royalblue3","chartreuse4", "tan", "goldenrod2"))+
-  theme(legend.position = "none", element_text(size=25))
+
 
 riverN<-ggplot(subset(wide_clusters1, site=="northern"), aes(x=burntrt, stratum=groups, alluvium=plot, 
                                    fill=groups, label=groups))+
-  geom_flow()+
+  geom_flow(width=.5)+
   scale_x_discrete(expand = c(.1, .1))+
-  geom_stratum(alpha=.5)+
-  geom_text(stat="stratum", size=5, min.y=3)+
+  geom_stratum(alpha=.5, width=.5)+
+  geom_text(stat="stratum", size=0, min.y=3)+
   scale_fill_manual(values=c("royalblue3","chartreuse4", "tan", "goldenrod2"))+
   theme(legend.position = "none")+xlab("")+
   theme(axis.title.x=element_blank(),axis.text.x=element_blank(),
-        axis.ticks.x=element_blank(), legend.title=(element_blank()), text=element_text(size=20))
+        axis.ticks.x=element_blank(), legend.title=(element_blank()), text=element_text(size=15))
 
 riverC<-ggplot(subset(wide_clusters1, site=="central"), aes(x=burntrt, stratum=groups, alluvium=plot, 
                                    fill=groups, label=groups))+
-  geom_flow()+
+  geom_flow(width=.5)+
   scale_x_discrete(expand = c(.1, .1))+
-  geom_stratum(alpha=.5)+
-  geom_text(stat="stratum", size=5, min.y=3)+
-  scale_fill_manual(values=c("royalblue3","chartreuse4", "tan", "goldenrod2"))+
+  geom_stratum(alpha=.5, width=.5)+
+  geom_text(stat="stratum", size=0, min.y=3)+
+  scale_fill_manual(values=c("royalblue3","chartreuse4", "goldenrod2", "tan"))+
   theme(legend.position = "none")+xlab("")+
   theme(axis.title.x=element_blank(),axis.text.x=element_blank(),
-        axis.ticks.x=element_blank(), legend.title=(element_blank()), text=element_text(size=20))
+        axis.ticks.x=element_blank(), legend.title=(element_blank()), text=element_text(size=15))
 
 riverS<-ggplot(subset(wide_clusters1, site=="southern"), aes(x=burntrt, stratum=groups, alluvium=plot, 
                                    fill=groups, label=groups))+
-  geom_flow()+
+  geom_flow(width=.5)+
   scale_x_discrete(expand = c(.1, .1))+
-  geom_stratum(alpha=.5)+
-  geom_text(stat="stratum", size=5, min.y=3)+
-  scale_fill_manual(values=c("chartreuse4", "tan", "goldenrod2"))+
-  theme(legend.position = "none", text=element_text(size=20))+xlab("")
+  geom_stratum(alpha=.5, width=.5)+
+  geom_text(stat="stratum", size=0, min.y=3)+
+  scale_fill_manual(values=c("royalblue3","goldenrod2", "tan"))+
+  theme(legend.position = "none", text=element_text(size=15))+xlab("")
 ggarrange(riverN, riverC, riverS, ncol=1, nrow=3)
   
 ### Question 2: Figure 4: Timeseries Riverplots
@@ -1024,6 +1060,7 @@ rownames(obs.table1)<-c('northern',"central", "southern")
 chisq.test(obs.table1)
 GTest(obs.table1)
 mosaic(obs.table1, gp = shading_Friendly, gp_args = list(interpolate = function(x) pmin(x/4, 1)), split_vertical = TRUE, type="observed")
+mosaic(obs.table2, gp = shading_hcl(obs.table3), split_vertical = TRUE, type="observed")
 
 sub1a<-obs.table1[1:2,]
 GTest(sub1a)
@@ -1042,7 +1079,7 @@ colnames(obs.table2)<-c('annual', 'stable', 'perennial')
 rownames(obs.table2)<-c('northern',"central", "southern")
 chisq.test(obs.table2)
 GTest(obs.table2)
-mosaic(obs.table2, gp = shading_Friendly, labeling=labeling_residuals, gp_args = list(interpolate = function(x) pmin(x/4, 1)), split_vertical = TRUE, main="Arthritis: [Treatment] [Improved]")
+f4b<-mosaic(obs.table2, gp = shading_Friendly, labeling=labeling_residuals, gp_args = list(interpolate = function(x) pmin(x/4, 1)), split_vertical = TRUE, main="Arthritis: [Treatment] [Improved]")
 
 shading_Friendly2()ot2<-t(obs.table2)
 pairwise.G.test(ot2, p.method="none")
@@ -1055,9 +1092,9 @@ colnames(obs.table3)<-c('transition', 'stable')
 rownames(obs.table3)<-c('burned', 'unburned')
 chisq.test(obs.table3)
 GTest(obs.table3)
-mosaic(obs.table3, gp = shading_Friendly, gp_args = list(interpolate = function(x) pmin(x/4, 1)), split_vertical = TRUE, main="Arthritis: [Treatment] [Improved]")
+f4c<-mosaic(obs.table3, gp = shading_Friendly, gp_args = list(interpolate = function(x) pmin(x/4, 1)), split_vertical = TRUE)
 
-
+ggarrange(f4a, f4b, f4c)
  ### Question 2: Timeseries NMDS ####
 
 vegtog3p<-vegtog2p%>%
