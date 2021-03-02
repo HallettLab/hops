@@ -2,6 +2,8 @@
 ### Analysis of first year burning and seeding in sites
 library(tidyverse)
 library(ggpubr)
+library(vegan)
+library(codyn)
 ##FN for Calculating SE
 calcSE<-function(x){
   x <- x[!is.na(x)]
@@ -329,7 +331,7 @@ vegtog_survival_spread<-vegtog_survival%>%
 survivalTS<-subset(vegtog_survival, site=="Central")%>%
   dplyr::select(plot, sub, micro, seedmix, burntrt, species, count, survival)
 
-#### STAT ####
+#### STATS SURVIVAL ####
 library(nlme)
 library(multcomp)
 survivalTS2<-survivalTS1%>%
@@ -338,6 +340,12 @@ survivalTS2<-survivalTS1%>%
 #Fescue survival MM TS
 survival_fesroe<-lme(survival3~trt, random = ~1|micro/sub, data = subset(survivalTS2, species=="fesroe"))
 summary(glht(survival_fesroe, linfct=mcp(trt="Tukey")))
+#Danthonia survival MM TS
+survival_danthonia<-lme(survival3~trt, random = ~1|micro/sub, data = subset(survivalTS2, species=="dancalor"))
+summary(glht(survival_danthonia, linfct=mcp(trt="Tukey")))
+#Koeleria survival MM TS
+survival_koeleria<-lme(survival3~trt, random = ~1|micro/sub, data = subset(survivalTS2, species=="koeleria"))
+summary(glht(survival_koeleria, linfct=mcp(trt="Tukey")))
 #Pasture survival MM TS
 survival_pasture<-lme(survival3~trt, random = ~1|micro/sub, data = subset(survivalTS2, species=="pasture"))
 summary(glht(survival_pasture, linfct=mcp(trt="Tukey")))
@@ -393,7 +401,7 @@ ggplot(subset(survivalTS_agg1), aes(x=as.factor(year), meansurvival)) +
   geom_point(aes(group=burntrt, color=burntrt))+
   geom_errorbar(aes(ymin=meansurvival-sesurvival, ymax=meansurvival+sesurvival,group=burntrt, color=burntrt), width=.2)+
   xlab("")+ylab("Central site net survival")+scale_color_manual(values=c("dodgerblue", "brown3"))+
-  facet_wrap(~species, scales="free")+theme(text=element_text(size=15), legend.title= element_blank())
+  facet_wrap(~species)+theme(text=element_text(size=15), legend.title= element_blank())
 
 #ggarrange(cnt, srv, common.legend = T, legend="right")
 
@@ -467,7 +475,7 @@ eug.shannon<-left_join(eug.shannon, community_diversity(eug.shannon, abundance.v
     summarize(richness=sum(present), abundance=sum(count))%>%
     gather(metric, value, richness, abundance, Shannon)
    
-######### FIGURE 4B: RESTO seedling diversity ####
+######### FIGURE 5B: RESTO seedling diversity ####
   f5b<-ggplot(subset(eug.shannon, metric!="richness"), aes(x=burntrt, y=value))+
   geom_jitter(size=.5, color="grey")+
   geom_boxplot(aes(fill=burntrt))+  facet_grid(metric~site, scales="free")+
@@ -632,7 +640,7 @@ vegtog_survival_agg[is.na(vegtog_survival_agg)] <- 0
 #                     values=c("dodgerblue", "brown2"))+theme(axis.text.x=element_blank(),
 #                                                             axis.ticks.x=element_blank(), 
 #                                                             legend.title=(element_blank()))
-### FIGURE 6: SURVIVAL AS FN OF BIOMASS ####
+### Figure 6 ####
 ggplot(subset(vegtog_survival_agg, longevity=="p"&type=="g"&native!="California Perennials"), aes(x=perl*talll, y=log(survival+1), succ=success, fail=failure))+ 
   geom_jitter(aes(color=burntrt)) +facet_grid(native~site, scales="free")  +
   geom_smooth(method = "glm", 
@@ -663,7 +671,7 @@ summary(mod)
  
 ### 3.xx Does litter cover affect community composition (percents of other groups?) - what happens when you burn away litter to background community? compare within plots difference between burned/not burned. 
 
-### Question 1: Setup clusters (2019) ####
+### Setup clusters (2019) ####
 wide_composition<-vegtog2p%>%
   gather(burntrt, cover, Burned, NotBurned)%>%
   dplyr::select(-4, -5)%>%
@@ -674,6 +682,23 @@ wide_composition<-vegtog2p%>%
   filter(id!="51_NotBurned")
 colnames(wide_composition)<-c("id", "pg", "ag", "f")
 wide_composition_rel<-wide_composition%>%
+  group_by(id)%>%
+  mutate(totcov=sum(pg, ag, f))%>%
+  mutate(pg=pg*100/totcov, ag=ag*100/totcov, f=f*100/totcov)%>%
+  mutate(newtot=ag+pg+f)%>%
+  dplyr::select(-totcov, -newtot)%>%
+  ungroup()
+wcrUB<-vegtog2p%>%
+  gather(burntrt, cover, Burned, NotBurned)%>%
+  dplyr::select(-4, -5)%>%
+  spread(func, cover, fill=0)%>%
+  filter(burntrt=="NotBurned")%>%
+  mutate(id=paste(plot, burntrt, sep="_"))%>%
+  dplyr::select(9, 4, 5, 6)%>%
+  dplyr::select(1:4)%>%
+  filter(id!="51_NotBurned")
+colnames(wcrUB)<-c("id", "pg", "ag", "f")
+wcrUB1<-wcrUB%>%
   group_by(id)%>%
   mutate(totcov=sum(pg, ag, f))%>%
   mutate(pg=pg*100/totcov, ag=ag*100/totcov, f=f*100/totcov)%>%
@@ -695,6 +720,15 @@ wcrNUB<-wcrNUB%>%
   dplyr::select(-totcov, -newtot)%>%
   ungroup()
 
+wcrNUBdrought_control<-wcrNUB%>%
+  filter(id%in% unique(filter(newplotkey, site=='nortnern'&(fullclim=="control"|fullclim=="drought"))$plot))
+wcrNUBwarm_control<-wcrNUB%>%
+  filter(id%in% unique(filter(newplotkey, site=='nortnern'&(fullclim=="control"|fullclim=="warm"))$plot))
+wcrNUBwarmppt_control<-wcrNUB%>%
+  filter(id%in% unique(filter(newplotkey, site=='nortnern'&(fullclim=="control"|fullclim=="warmppt"))$plot))
+
+
+
 wcrCUB<-vegtog2p%>%
   filter(site=="Central")%>%  
   dplyr::select(-NotBurned, -burnLRR, -burndiff)%>%
@@ -708,6 +742,13 @@ wcrCUB<-wcrCUB%>%
   mutate(newtot=ag+pg+f)%>%
   dplyr::select(-totcov, -newtot)%>%
   ungroup()
+wcrCUBdrought_control<-wcrCUB%>%
+  filter(id%in% unique(filter(newplotkey, site=='central'&(fullclim=="control"|fullclim=="drought"))$plot))
+wcrCUBwarm_control<-wcrCUB%>%
+  filter(id%in% unique(filter(newplotkey, site=='central'&(fullclim=="control"|fullclim=="warm"))$plot))
+wcrCUBwarmppt_control<-wcrCUB%>%
+  filter(id%in% unique(filter(newplotkey, site=='central'&(fullclim=="control"|fullclim=="warmppt"))$plot))
+
 
 wcrSUB<-vegtog2p%>%
   filter(site=="Southern")%>%  
@@ -722,10 +763,20 @@ wcrSUB<-wcrSUB%>%
   mutate(newtot=ag+pg+f)%>%
   dplyr::select(-totcov, -newtot)%>%
   ungroup()
+wcrSUBdrought_control<-wcrSUB%>%
+  filter(id%in% unique(filter(newplotkey, site=='southern'&(fullclim=="control"|fullclim=="drought"))$plot))
+wcrSUBwarm_control<-wcrSUB%>%
+  filter(id%in% unique(filter(newplotkey, site=='southern'&(fullclim=="control"|fullclim=="warm"))$plot))
+wcrSUBwarmppt_control<-wcrSUB%>%
+  filter(id%in% unique(filter(newplotkey, site=='southern'&(fullclim=="control"|fullclim=="warmppt"))$plot))
+
 
 # add rownames
 rownames(wide_composition_rel) <-wide_composition$id
 wide_composition_rel <- dplyr::select(wide_composition_rel, -id)
+
+rownames(wcrUB1) <-wcrUB1$id
+wcrUB1 <- dplyr::select(wcrUB1, -id)
 
 library(vegan)
 library(MASS)
@@ -745,28 +796,27 @@ fviz_nbclust(as.matrix(wide_dist), FUN = hcut, method="wss")
 groups<-cutree(x, k=4) #change K to change number of clusters
 
 wide_clusters<-cbind(wide_composition, groups)
-wide_clusters$ID <- row.names(wide_clusters)#%>%
+#wide_clusters$id <- row.names(wide_clusters)#%>%
 wide_clusters1<-wide_clusters%>%
-  separate(ID, c("plot", "burntrt"))%>%
+  separate(id, c("plot", "burntrt"))%>%
   #dplyr::select(plot, burntrt, 2, 3, 4, 5)%>%
   mutate(plot=as.numeric(plot))%>%
   mutate(site=ifelse(plot<21, "southern", "central"))%>%
   mutate(site=ifelse(plot>40, "northern", site))%>%
   mutate(groups=as.factor(groups))%>%
-  mutate(groups=ifelse(groups==1, "More Annuals", ifelse(groups==2, "Annuals Dominant", ifelse(groups==4, "Forbs and Perennials", "Forbs"))))
+  mutate(groups=ifelse(groups==1, "AG + Forbs", ifelse(groups==2, "Annuals Dominant", ifelse(groups==4, "PG + Forbs", "Forbs Dominant"))))
   #mutate(groups=ifelse(groups==3, "Forbs and Perennials", ifelse(groups==1, "Annuals", "Forbs")))
 wide_clusters1$site<-factor(wide_clusters1$site, levels=c("southern", 
                                           "central", 
                                           "northern"))
-wide_clusters1$groups<-factor(wide_clusters1$groups, levels=c("Forbs", 
-                                                          "Forbs and Perennials", 
-                                                          "More Annuals", "Annuals Dominant"))
+wide_clusters1$groups<-factor(wide_clusters1$groups, levels=c("Forbs Dominant", 
+                                                          "PG + Forbs", 
+                                                          "AG + Forbs", "Annuals Dominant"))
 #wide_clusters1$groups<-factor(wide_clusters1$groups, levels=c("Forbs", 
-                                                              "Forbs and Perennials", 
-                                                              "Annuals"))
+                                                         
 wide_clusters1$burntrt<-factor(wide_clusters1$burntrt, levels=c("NotBurned", "Burned"))
 
-### Figure 2b ####
+### Figure 2a ####
 ### characterize clusters
 cluster_char<-wide_clusters1%>%
   gather(fg, cover, ag, pg, f)
@@ -776,14 +826,14 @@ means<-cluster_char%>%
   group_by(groups, fg)%>%
   summarize(mean=mean(cover), se=calcSE(cover))
 
-### 2b ####
+### 2a 
 ggplot(cluster_char, aes(x=groups, y=cover))+geom_boxplot(aes(fill=fg))  +
   scale_fill_manual(labels=c("forbs", "perennial grasses", "annual grasses"), 
-                         values=c("gray25", "gray55", "gray90"))+
+                         values=c("royalblue3","chartreuse4",  "goldenrod2"))+
   theme(axis.title.x=element_blank(),
-        axis.ticks.x=element_blank(), legend.title=(element_blank()), text=element_text(size=20)) +ylab("Mean Sublot % Cover")
+        axis.ticks.x=element_blank(), legend.title=(element_blank()), text=element_text(size=13)) +ylab("Mean sublot relative cover") + theme_classic()
 
-### Figure 2a #### 
+### Figure 2b #### 
 
 # run the NMDS
 plotspecNMDS <- metaMDS(wide_composition_rel, scale=T)
@@ -792,7 +842,7 @@ plot(plotspecNMDS)
 
 # Extract and format axis scores
 data.scores <- as.data.frame(scores(plotspecNMDS, display=c("sites")))
-data.scores$ID <- row.names(wide_composition_rel)
+data.scores$ID <- (wide_composition$id)
 
 data.scores <- as_tibble(data.scores) %>%
   separate(ID, c("plot", "burntrt"), sep="_") %>%
@@ -802,10 +852,9 @@ data.scores <- as_tibble(data.scores) %>%
 data.scores<-left_join(data.scores, dplyr::select(wide_clusters1, plot, burntrt, groups))
 plotkey<-plotkey%>%
   mutate(burntrt=ifelse(burntrt=="u", "NotBurned", "Burned"))
-data.scores<-left_join(data.scores, dplyr::select(plotkey, plot, burntrt, fullclim))
-data.scores<-data.scores%>%
-  mutate(fullclim=ifelse(fullclim=="drought"|fullclim=="control", "control", "warmed"))
+data.scores<-left_join(data.scores, dplyr::select(plotkey, plot, fullclim))
 
+ 
 # Extract and format species scores
 species.scores <- as.data.frame(scores(plotspecNMDS, display=c("species")))
 species.scores$species <- row.names(species.scores)
@@ -822,9 +871,9 @@ arrows<-site.burn.mean%>%
   dplyr::select(-burntrt)%>%
   spread(id, val)
 
-site.warm.mean=aggregate(data.scores[,c("NMDS1", "NMDS2")], 
+site.trt.mean=aggregate(data.scores[,c("NMDS1", "NMDS2")], 
                             list(group = interaction(data.scores$site, data.scores$fullclim)), mean)
-arrows.warm<-site.warm.mean%>%
+arrows.trt<-site.trt.mean%>%
   separate(group, into = c("site", "fullclim"))%>%
   gather("id", "val", NMDS1, NMDS2)%>%
   mutate(id=ifelse(id=="NMDS1", "x", "y"))%>%
@@ -832,39 +881,46 @@ arrows.warm<-site.warm.mean%>%
   dplyr::select(-fullclim)%>%
   spread(id, val)
 
-### Pub Figure 3: NMDS/site by burntrt (2019)
+### NMDS/site by burntrt (2019)
 
-#ggplot() +
-  # add the species labels
- # geom_point(data=data.scores,aes(x=NMDS1,y=NMDS2,shape=burntrt, color=site,), size=2) + # add the point markers
-  #  geom_text(data=data.scores,aes(x=NMDS1,y=NMDS2,label=site),size=6,vjust=0) +  # add the site labels
-#  scale_colour_manual(values=c("gray50", "gray80", "black")) +
-#  scale_shape_manual(values=c(1, 16))+
-#  geom_text(data=species.scores,aes(x=NMDS1,y=NMDS2,label=species), size=4) +
-#  coord_equal() +
-#  theme_bw()+
-  #annotate("text",x = site.burn.mean$NMDS1,y = site.burn.mean$NMDS2,label=site.burn.mean$group)+
- # geom_segment(aes(x=arrows$x_NotBurned, y=arrows$y_NotBurned, 
-   #                xend=arrows$x_Burned, yend=arrows$y_Burned), 
-  #             arrow=arrow(length=unit(.3, "cm")), color="red3", size=2)
-
-
-###Figure 2a. Site/Cluster/Warming NMDS
 ggplot() +
-  # add the species labels
-  stat_ellipse(aes(x=data.scores$NMDS1, y=data.scores$NMDS2, color=data.scores$site), type='t',size =.75, linetype=2)+
-  geom_point(data=subset(data.scores, burntrt=="NotBurned"),aes(x=NMDS1,y=NMDS2,shape=fullclim, color=groups,), size=2) + # add the point markers
-  #  geom_text(data=data.scores,aes(x=NMDS1,y=NMDS2,label=site),size=6,vjust=0) +  # add the site labels
- # scale_colour_manual(values=c("gray50", "gray80", "black")) +
+   #add the species labels
+  geom_point(data=data.scores,aes(x=NMDS1,y=NMDS2,shape=burntrt, color=site,), size=2) + # add the point markers
+    geom_text(data=data.scores,aes(x=NMDS1,y=NMDS2,label=site),size=6,vjust=0) +  # add the site labels
+  scale_colour_manual(values=c("gray50", "gray80", "black")) +
   scale_shape_manual(values=c(1, 16))+
-  coord_equal() +
-  scale_color_manual(values=c("tan","grey50" , "royalblue3","chartreuse4","goldenrod2", "gray80",  "black"))+
   geom_text(data=species.scores,aes(x=NMDS1,y=NMDS2,label=species), size=4) +
-  theme_bw()+xlab("NMDS 1")+ylab("NMDS 2")+
-  geom_segment(aes(x=arrows.warm$x_control, y=arrows.warm$y_control, 
-                   xend=arrows.warm$x_warmed, yend=arrows.warm$y_warmed), 
-               arrow=arrow(length=unit(.3, "cm")), size=1.5)
- 
+  coord_equal() +
+  theme_bw()+
+  annotate("text",x = site.burn.mean$NMDS1,y = site.burn.mean$NMDS2,label=site.burn.mean$group)+
+  geom_segment(aes(x=arrows$x_NotBurned, y=arrows$y_NotBurned, 
+                   xend=arrows$x_Burned, yend=arrows$y_Burned), 
+               arrow=arrow(length=unit(.3, "cm")), color="red3", size=2)
+
+
+### NMDS Site x trt (add cluster after)
+ggplot() +
+  geom_point(data=subset(data.scores, burntrt=="NotBurned"),aes(x=NMDS1,y=NMDS2,shape=fullclim, color=site), size=2) + # add the point markers
+  coord_equal() +
+  scale_colour_manual(values=c("gray50", "gray80", "black")) +
+  scale_shape_manual(values=c(16, 17, 3, 8))+
+  geom_segment(data=species.scores,aes(x=0,xend=NMDS1,y=0,yend=NMDS2),
+               arrow = arrow(length = unit(0.25, "cm")),colour="grey70")+
+  geom_text(data=species.scores,aes(x=NMDS1,y=NMDS2,label=species), size=4) +
+  theme_classic()+xlab("NMDS 1")+ylab("NMDS 2")+theme_classic()#+
+
+#### Figure 2c
+  ggplot() +
+    geom_point(data=subset(data.scores, burntrt=="NotBurned"),aes(x=NMDS1,y=NMDS2,shape=groups, color=site), size=2) +
+    scale_colour_manual(values=c("gray50", "gray80", "black")) +
+    scale_shape_manual(values=c(16, 17, 3, 8))+
+    geom_segment(data=species.scores,aes(x=0,xend=NMDS1,y=0,yend=NMDS2),
+                 arrow = arrow(length = unit(0.25, "cm")),colour="grey70")+
+    geom_text(data=species.scores,aes(x=NMDS1,y=NMDS2,label=species), size=4) +
+    theme_classic()+xlab("NMDS 1")+ylab("NMDS 2")+theme_classic()  
+  
+  
+  
 
 library(vegan)
 
@@ -874,19 +930,48 @@ wcrel2<-wide_composition%>%
   separate(id, into=c("plot", "burntrt"), sep="_")%>%
   mutate(plot=as.numeric(plot))%>%
   mutate(site=ifelse(plot<21, "southern", ifelse(plot>40, "nortnern", "central")))
-wcrel2.5<-unique(select(wcrel3, plot, fullclim))%>%
-  mutate(fullclim=ifelse(fullclim=="drought"|fullclim=="control", "ambient", "warmed"))
+wcrel2.5<-unique((dplyr::select(wcrel3, plot, fullclim)))
 wcrel2.5<-left_join(wcrel2, wcrel2.5)
-wcrel2.5.5<-unique(select(data.scores, burntrt, plot, groups))
-newplotkey<-left_join(wcrel2.5, wcrel2.5.5)
-                  
-adonis(wide_composition_rel ~ site+fullclim, data=wcrel2.5, perm=1e3)
+wcrel2.5.5<-unique(dplyr::select(data.scores, burntrt, plot, groups))
+newplotkey<-left_join(wcrel2.5, wcrel2.5.5)%>%
+  mutate(warmtrt=ifelse(fullclim=="warm"|fullclim=="warmppt", "warm", "ambient"))
+     
 
-adonis(select(filter(wcrNUB, id!=51), -1) ~ fullclim, data=subset(wcrel2.5, site=="nortnern"&burntrt=="NotBurned"), perm=1e3) # nothing significant
-adonis(select(wcrCUB, -1) ~ fullclim, data=subset(wcrel2.5, site=="central"&burntrt=="NotBurned"), perm=1e3) # nothing significant
-adonis(select(wcrSUB, -1) ~ fullclim, data=subset(wcrel2.5, site=="southern"&burntrt=="NotBurned"), perm=1e3) # nothing significant
+##perMANOVA
+# main effects of site and climate and groups
+adonis(wcrUB1 ~ site*fullclim, data=subset(wcrel2.5, burntrt=="NotBurned"), perm=1e3)
+adonis(wcrUB1 ~ groups, data=subset(newplotkey, burntrt=="NotBurned"), perm=1e3)
 
-adonis(wide_composition_rel ~ groups, data=newplotkey, perm=1e3)
+
+
+#main effects of climate within each group. none, so dont go into pairs.   
+adonis(dplyr::select(filter(wcrNUB, id!=51), -1) ~ fullclim, data=subset(wcrel2.5, site=="nortnern"&burntrt=="NotBurned"), perm=1e3) # nothing significant
+adonis(dplyr::select(wcrCUB, -1) ~ fullclim, data=subset(wcrel2.5, site=="central"&burntrt=="NotBurned"), perm=1e3) # nothing significant
+adonis(dplyr::select(wcrSUB, -1) ~ fullclim, data=subset(wcrel2.5, site=="southern"&burntrt=="NotBurned"), perm=1e3) # nothing significant
+
+#with warming combined
+adonis(wcrUB1 ~ site*warmtrt, data=subset(newplotkey, burntrt=="NotBurned"), perm=1e3)
+
+adonis(dplyr::select(filter(wcrNUB, id!=51), -1) ~ warmtrt, data=subset(newplotkey, site=="nortnern"&burntrt=="NotBurned"), perm=1e3) # nothing significant
+adonis(dplyr::select(wcrCUB, -1) ~ warmtrt, data=subset(newplotkey, site=="central"&burntrt=="NotBurned"), perm=1e3) # nothing significant
+adonis(dplyr::select(wcrSUB, -1) ~ warmtrt, data=subset(newplotkey, site=="southern"&burntrt=="NotBurned"), perm=1e3) # nothing significant
+
+#just drought
+adonis(dplyr::select(filter(wcrNUBdrought_control, id!=51), -1) ~ fullclim, data=subset(wcrel2.5, site=="nortnern"&burntrt=="NotBurned"&(fullclim=="control"|fullclim=="drought")), perm=1e3) # nothing significant
+adonis(dplyr::select(wcrCUBdrought_control, -1) ~ fullclim, data=subset(wcrel2.5, site=="central"&burntrt=="NotBurned"&(fullclim=="control"|fullclim=="drought")), perm=1e3) # nothing significant
+adonis(dplyr::select(wcrSUBdrought_control, -1) ~ fullclim, data=subset(wcrel2.5, site=="southern"&burntrt=="NotBurned"&(fullclim=="control"|fullclim=="drought")), perm=1e3) # nothing significant
+
+#just warm
+adonis(dplyr::select(filter(wcrNUBwarm_control, id!=51), -1) ~ fullclim, data=subset(wcrel2.5, site=="nortnern"&burntrt=="NotBurned"&(fullclim=="control"|fullclim=="warm")), perm=1e3) # nothing significant
+adonis(dplyr::select(wcrCUBwarm_control, -1) ~ fullclim, data=subset(wcrel2.5, site=="central"&burntrt=="NotBurned"&(fullclim=="control"|fullclim=="warm")), perm=1e3) # nothing significant
+adonis(dplyr::select(wcrSUBwarm_control, -1) ~ fullclim, data=subset(wcrel2.5, site=="southern"&burntrt=="NotBurned"&(fullclim=="control"|fullclim=="warm")), perm=1e3) # nothing significant
+
+#just warmppt
+adonis(dplyr::select(filter(wcrNUBdrought_control, id!=51), -1) ~ fullclim, data=subset(wcrel2.5, site=="nortnern"&burntrt=="NotBurned"&(fullclim=="control"|fullclim=="warmppt")), perm=1e3) # nothing significant
+adonis(dplyr::select(wcrCUBdrought_control, -1) ~ fullclim, data=subset(wcrel2.5, site=="central"&burntrt=="NotBurned"&(fullclim=="control"|fullclim=="warmppt")), perm=1e3) # nothing significant
+adonis(dplyr::select(wcrSUBdrought_control, -1) ~ fullclim, data=subset(wcrel2.5, site=="southern"&burntrt=="NotBurned"&(fullclim=="control"|fullclim=="warmppt")), perm=1e3) # nothing significant
+
+
 
 
 ### Figure 3####
@@ -1010,7 +1095,7 @@ transitions<-wide_clusters1%>%
 ### recharacterize
 ggplot(cluster_char, aes(x=as.factor(groups), y=cover))+geom_boxplot(aes(fill=fg))  +
   scale_fill_manual(labels=c("forbs", "perennial grasses", "annual grasses"), 
-                    values=c( "gray25", "gray55", "gray90"))+
+                    values=c( "chartreuse3", "gray55", "goldenrod2"))+
   theme(axis.title.x=element_blank(),
         axis.ticks.x=element_blank(), legend.title=(element_blank())) +ylab("Microplot % cover")
 
@@ -1238,25 +1323,48 @@ arrows2<-arrows%>%
   gather(id, val, )
 ### Pub Figure 3: NMDS/site by burntrt (2019)
 
+arrows2019<-subset(arrows,year==2019)
+arrows2020<-subset(arrows,year==2020)
+
+#2019
 ggplot() +
+  theme_classic()+
   # add the species labels
-  geom_point(data=data.scores,aes(x=NMDS1,y=NMDS2,shape=burntrt, color=year), size=2) + # add the point markers
-  stat_ellipse(aes(x=data.scores$NMDS1, y=data.scores$NMDS2, color=data.scores$site), type='t',size =.75, linetype=2)+
+  geom_point(data=subset(data.scores,year==2019),aes(x=NMDS1,y=NMDS2,shape=site, color=burntrt), size=2) + # add the point markers
+  stat_ellipse(aes(x=data.scores$NMDS1, y=data.scores$NMDS2, color=data.scores$site), type='t',size =.5, linetype=2)+
   #  geom_text(data=data.scores,aes(x=NMDS1,y=NMDS2,label=site),size=6,vjust=0) +  # add the site labels
-  scale_colour_manual(values=c("salmon", "skyblue2", "grey50", "grey80", "black")) +
-  scale_shape_manual(values=c(1, 16))+
+  scale_colour_manual(values=c("brown3","grey50", "grey80",   "dodgerblue","black")) +
+  scale_shape_manual(values=c(15, 16, 17))+
   geom_text(data=species.scores,aes(x=NMDS1,y=NMDS2,label=species), size=4) +
   coord_equal() +
-  theme_bw()+
   #annotate("text",x = site.burn.mean$NMDS1,y = site.burn.mean$NMDS2,label=site.burn.mean$group)+
-  geom_segment(aes(x=arrows$x_NotBurned, y=arrows$y_NotBurned, 
-                   xend=arrows$x_Burned, yend=arrows$y_Burned), 
-               arrow=arrow(length=unit(.3, "cm")), color="red3", size=2)+
+  geom_segment(aes(x=arrows2019$x_NotBurned, y=arrows2019$y_NotBurned, 
+                   xend=arrows2019$x_Burned, yend=arrows2019$y_Burned), 
+               arrow=arrow(length=unit(.3, "cm")), color="black", size=2)#+
   geom_segment(aes(x=0.05216261, y=-0.08951118, 
                    xend=0.14580061, yend=-0.03681127), 
                arrow=arrow(length=unit(.3, "cm")), color="blue3", size=2)
 
-
+#2020  
+  ggplot() +
+    theme_classic()+
+    # add the species labels
+    geom_point(data=subset(data.scores,year==2020),aes(x=NMDS1,y=NMDS2,shape=site, color=burntrt), size=2) + # add the point markers
+   # stat_ellipse(data=subset(data.scores, site=="central"), aes(x=NMDS1, y=NMDS2), type='t',size =.75, linetype=2)+
+    #  geom_text(data=data.scores,aes(x=NMDS1,y=NMDS2,label=site),size=6,vjust=0) +  # add the site labels
+    scale_colour_manual(values=c("brown3","dodgerblue","black")) +
+    scale_shape_manual(values=c(15, 16, 17))+
+    geom_text(data=species.scores,aes(x=NMDS1,y=NMDS2,label=species), size=4) +
+    coord_equal() +
+    #annotate("text",x = site.burn.mean$NMDS1,y = site.burn.mean$NMDS2,label=site.burn.mean$group)+
+    geom_segment(aes(x=arrows2020$x_NotBurned, y=arrows2020$y_NotBurned, 
+                     xend=arrows2020$x_Burned, yend=arrows2020$y_Burned), 
+                 arrow=arrow(length=unit(.3, "cm")), color="black", size=2)+
+    xlim(-.65, .5)#+
+  geom_segment(aes(x=0.05216261, y=-0.08951118, 
+                   xend=0.14580061, yend=-0.03681127), 
+               arrow=arrow(length=unit(.3, "cm")), color="blue3", size=2)
+  
 ### STATS NMDS2
 wcrNUB<-vegtog2p%>%
   filter(site=="Northern")%>%  
