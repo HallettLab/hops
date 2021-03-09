@@ -272,6 +272,20 @@ f5a<-ggplot(subset(vegtog_survival, func=="Native Perennial Grasses"|func=="Past
         axis.text.x=element_blank(),
         axis.ticks.x=element_blank(), legend.title=(element_blank()))+ylab("Proportion of Seedling Survival")+ggtitle("Native Perennial Grasses")
 
+clusters<-dplyr::select(wide_clusters1, plot, groups, burntrt)%>%mutate(burntrt=ifelse(burntrt=="Burned", "Burned", "Not Burned"))
+## add in clusters! 
+seedlings_clusters<-left_join(mutate(vegtog_survival, plot=as.double(plot)), clusters)%>%
+  dplyr::select(1, 2, 4, 11, 15, 16, 25, 27, 28)
+
+f4aNEW<-ggplot(subset(seedlings_clusters, func=="Native Perennial Grasses"|func=="Pasture Grasses"), aes(x=burntrt, y=survival, fill=burntrt))+
+  geom_jitter(size=.5, color="grey")+
+  geom_boxplot() + facet_grid(func~groups, scales="free") +
+  scale_fill_manual(labels=c("Burned", "Unburned", "Unburned, Warmed", "Burned, Warmed"), 
+                   values=c("brown2", "dodgerblue", "chartreuse3", "orange"))+ geom_hline(yintercept=0)+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(), legend.title=(element_blank()))+ylab("Proportion of Seedling Survival")+ggtitle("Native Perennial Grasses")
+
 
 ## SETUP timeseries central site survival ####
 survival2020<-vegplot2020%>%
@@ -462,7 +476,7 @@ ggplot(subset(survivalTS_agg1), aes(x=as.factor(year), meansurvival)) +
  #eugene mix shannon diversity
  library(codyn)
  eug.shannon<-left_join(vegtog_counts, spkey, by=c("species"="code"))%>%
-   filter(seedmix=="Restoration mix")%>%
+   filter(seedmix=="Forbs")%>%
    group_by(plot, sub, micro, site, burntrt)%>%
    mutate(present=count/count)%>%
    mutate(rep=paste(plot, sub, micro, site))
@@ -489,7 +503,7 @@ eug.shannon<-left_join(eug.shannon, community_diversity(eug.shannon, abundance.v
 #combine figures 4 a and b
 figure5<-vegtog_survival%>%
  ungroup()%>%
-  select(plot, sub, micro, site, burntrt, func, survival)%>%
+  dplyr::select(plot, sub, micro, site, burntrt, func, survival)%>%
   filter(func=="Native Perennial Grasses"|func=="Pasture Grasses" )%>%
   mutate(metric=func, value=survival)%>%
   dplyr::select(-func, -survival)
@@ -498,6 +512,8 @@ figure5<-rbind(figure5, ungroup(eug.shannon))%>%
   filter(metric!="richness")
 figure5$metric<-factor(figure5$metric, levels=c("Native Perennial Grasses", "Pasture Grasses", "abundance", "Shannon"))
 
+
+######## FINALIZED FIGURE 4 by SITE ###########
 ggplot(subset(figure5, metric!="richness"), aes(x=burntrt, y=value))+
   geom_jitter(size=.5, color="grey")+
   geom_boxplot(aes(fill=burntrt))+  facet_grid(metric~site, scales="free")+
@@ -505,7 +521,7 @@ ggplot(subset(figure5, metric!="richness"), aes(x=burntrt, y=value))+
                     values=c("dodgerblue", "brown2"))+
   theme(axis.title.x=element_blank(),
         axis.text.x=element_blank(),
-        axis.ticks.x=element_blank(), legend.title=(element_blank()))+theme(text=element_text(size=15))+ylab("")+ geom_hline(yintercept=0)
+        axis.ticks.x=element_blank(), legend.title=(element_blank()))+theme(text=element_text(size=15))+ylab("")+ geom_hline(yintercept=0)+theme_classic()
 
 figure5.cluster<-figure5%>%
   group_by(plot, sub, site, burntrt, metric)%>%
@@ -513,17 +529,83 @@ figure5.cluster<-figure5%>%
   ungroup()%>%
   mutate(plot=as.numeric(plot))%>%
   mutate(burntrt=ifelse(burntrt=="Not Burned", "NotBurned", "Burned"))
-figure5.cluster1<-left_join(figure5.cluster, select(wide_clusters1, groups, (plot), burntrt))
+figure5.cluster1<-left_join(figure5.cluster, dplyr::select(wide_clusters1, groups, (plot), burntrt))%>%
+  dplyr::select(-sub)%>%
+  spread(burntrt, groups)%>%
+  dplyr::select(-Burned)%>%
+  spread(`NotBurned`, mvalue)%>%
+  mutate(b=(`<NA>`))%>%
+  mutate(ub=ifelse(!is.na(`Annuals Dominant`), `Annuals Dominant`, 
+                   ifelse(!is.na(`AG + Forbs`), `AG + Forbs`, 
+                          ifelse(!is.na(`PG + Forbs`), `PG + Forbs`, `Forbs Dominant`))))%>%
+  mutate(b=ifelse(is.na(b), 0, b))%>%
+  mutate(func=ifelse(!is.na(`Annuals Dominant`), 'AG Dominant', 
+                     ifelse(!is.na(`AG + Forbs`), 'AG + Forbs', 
+                            ifelse(!is.na(`PG + Forbs`), 'PG + Forbs', 'Forbs Dominant'))))%>%
+  dplyr::select(-c(4:8))%>%
+  mutate(difference=b-ub)
+figure5.cluster1$func<-factor(figure5.cluster1$func, levels=c("AG Dominant", "AG + Forbs", "PG + Forbs", "Forbs Dominant"))
 
-ggplot(subset(figure5.cluster1, metric!="richness"), aes(x=burntrt, y=mvalue))+
+#### new figure 6 and paired supplement ####
+
+#unburned
+ggplot(subset(figure5.cluster1, metric!="richness"), aes(x=func, y=ub))+
   geom_jitter(size=.5, color="grey")+
-  geom_boxplot(aes(fill=burntrt))+  facet_grid(metric~groups*site, scales="free")+
-  scale_fill_manual( 
-                    values=c("dodgerblue", "brown2"))+
+  geom_boxplot(aes(fill=func))+  facet_grid(metric~site, scales="free")+
+scale_fill_manual(values=c("tan", "goldenrod2", "chartreuse4","royalblue3"))+
+  
   theme(axis.title.x=element_blank(),
         axis.text.x=element_blank(),
         axis.ticks.x=element_blank(), legend.title=(element_blank()))+theme(text=element_text(size=15))+ylab("")+ geom_hline(yintercept=0)
 
+
+#difference
+ggplot(subset(figure5.cluster1, metric!="richness"), aes(x=func, y=ub))+
+  geom_jitter(size=.5, color="grey")+
+  geom_boxplot(aes(fill=func))+  facet_wrap(~metric, scales="free")+
+  scale_fill_manual(values=c("tan", "goldenrod2", "chartreuse4","royalblue3"))+
+  theme(axis.title.x=element_blank(),
+           axis.text.x=element_blank())+theme_classic()
+
+#central ub
+ggplot(subset(figure5.cluster1, metric!="richness"&site=="Central"), aes(x=func, y=ub))+
+  geom_jitter(size=.5, color="grey")+
+  geom_boxplot(aes(fill=func))+  facet_wrap(~metric, scales="free")+
+  scale_fill_manual(values=c("tan", "goldenrod2", "chartreuse4","royalblue3"))+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank()) +theme_classic()
+
+#central difference
+ggplot(subset(figure5.cluster1, metric!="richness"&site=="Central"), aes(x=func, y=difference))+
+  geom_jitter(size=.5, color="grey")+
+  geom_boxplot(aes(fill=func))+  facet_wrap(~metric, scales="free")+
+  scale_fill_manual(values=c("tan", "goldenrod2", "chartreuse4","royalblue3"))+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank()) +theme_classic()
+
+inter<-mutate(figure5.cluster1, trt=as.factor(paste(func, site, sep="_")))  
+
+#allsite
+MM<-lme(difference~func, random = ~1|site, data = subset(inter, metric=="Native Perennial Grasses"&!is.na(difference)))
+summary(glht(MM, linfct=mcp(func="Tukey")))
+cld(glht(MM, linfct=mcp(func="Tukey")))
+
+#by site
+MM<-aov(ub~func, data = subset(inter, metric=="Native Perennial Grasses"&!is.na(difference)&site=="Central"))
+summary(glht(MM, linfct=mcp(func="Tukey")))
+cld(glht(MM, linfct=mcp(func="Tukey")))
+
+
+summary(glht(npgMM, linfct=mcp(func="Tukey")))
+cld(glht(npgMM, linfct=mcp(func="Tukey")))
+
+abMM<-lme(difference~func, random = ~1|site/plot, data = subset(figure5.cluster1, metric=="abundance"&!is.na(difference)))
+summary(glht(abMM, linfct=mcp(func="Tukey")))
+cld(glht(abMM, linfct=mcp(func="Tukey")))
+
+shMM<-lme(difference~func, random = ~1|plot, data = subset(figure5.cluster1, metric=="Shannon"&!is.na(difference)))
+summary(glht(shMM, linfct=mcp(func="Tukey")))
+cld(glht(shMM, linfct=mcp(func="Tukey")))
 
 ###STAT RESTO MIX ####
 eug_shan2<-eug.shannon%>%
@@ -640,8 +722,8 @@ vegtog_survival_agg[is.na(vegtog_survival_agg)] <- 0
 #                     values=c("dodgerblue", "brown2"))+theme(axis.text.x=element_blank(),
 #                                                             axis.ticks.x=element_blank(), 
 #                                                             legend.title=(element_blank()))
-### Figure 6 ####
-ggplot(subset(vegtog_survival_agg, longevity=="p"&type=="g"&native!="California Perennials"), aes(x=perl*talll, y=log(survival+1), succ=success, fail=failure))+ 
+### Figure 6 NOW SUPPLEMENT ####
+ggplot(subset(vegtog_survival_agg, longevity=="p"&type=="g"&native!="California Perennials"&burntrt=="Not Burned"), aes(x=perl*talll, y=log(survival+1), succ=success, fail=failure))+ 
   geom_jitter(aes(color=burntrt)) +facet_grid(native~site, scales="free")  +
   geom_smooth(method = "glm", 
               method.args = list(family = "binomial"), formula = cbind(succ, fail) ~ x, color="black", se=T) + xlab("Litter volume (cover*depth)")+
@@ -649,7 +731,8 @@ ggplot(subset(vegtog_survival_agg, longevity=="p"&type=="g"&native!="California 
                     values=c("dodgerblue", "brown2"))+theme(text=element_text(size=17),axis.text.x=element_blank(),
                                                            axis.ticks.x=element_blank(), 
                                                            legend.title=(element_blank()))+labs(y="Seedling survival")
-glmdata<-vegtog_survival_agg%>%
+
+  glmdata<-vegtog_survival_agg%>%
   mutate(lvol=perl(talll))
 mod <- glm(cbind(success, failure) ~ (perl*talll),family='binomial',data=subset(vegtog_survival_agg, native=="Pasture Grasses"&site=="Northern"), na.action=na.exclude)
 summary(mod)
@@ -688,6 +771,13 @@ wide_composition_rel<-wide_composition%>%
   mutate(newtot=ag+pg+f)%>%
   dplyr::select(-totcov, -newtot)%>%
   ungroup()
+
+wcrS<-wide_composition_rel[1:40,]
+wcrC<-wide_composition_rel[41:80,]
+wcrNa<-wide_composition_rel[81:100,]
+wcrNb<-wide_composition_rel[102:119,]
+wcrN<-rbind(wcrNa, wcrNb)
+
 wcrUB<-vegtog2p%>%
   gather(burntrt, cover, Burned, NotBurned)%>%
   dplyr::select(-4, -5)%>%
@@ -809,9 +899,7 @@ wide_clusters1<-wide_clusters%>%
 wide_clusters1$site<-factor(wide_clusters1$site, levels=c("southern", 
                                           "central", 
                                           "northern"))
-wide_clusters1$groups<-factor(wide_clusters1$groups, levels=c("Forbs Dominant", 
-                                                          "PG + Forbs", 
-                                                          "AG + Forbs", "Annuals Dominant"))
+wide_clusters1$groups<-factor(wide_clusters1$groups, levels=c("Annuals Dominant", "AG + Forbs","PG + Forbs","Forbs Dominant"))
 #wide_clusters1$groups<-factor(wide_clusters1$groups, levels=c("Forbs", 
                                                          
 wide_clusters1$burntrt<-factor(wide_clusters1$burntrt, levels=c("NotBurned", "Burned"))
@@ -832,6 +920,16 @@ ggplot(cluster_char, aes(x=groups, y=cover))+geom_boxplot(aes(fill=fg))  +
                          values=c("royalblue3","chartreuse4",  "goldenrod2"))+
   theme(axis.title.x=element_blank(),
         axis.ticks.x=element_blank(), legend.title=(element_blank()), text=element_text(size=13)) +ylab("Mean sublot relative cover") + theme_classic()
+
+#2a stats
+cluster_char1<-mutate(cluster_char, trt=as.factor(paste(groups, fg, sep="_")))
+
+pgMM<-lme(cover~trt, random = ~1|site/plot/burntrt, data = subset(cluster_char1))
+summary(glht(pgMM, linfct=mcp(trt="Tukey")))
+
+ShannonMM<-lme(value~trt, random = ~1|sub/micro, data = subset(eug_shan2, metric=="Shannon"))
+summary(glht(ShannonMM, linfct=mcp(trt="Tukey")))
+cld(glht(pgMM, linfct=mcp(trt="Tukey")))
 
 ### Figure 2b #### 
 
@@ -881,22 +979,6 @@ arrows.trt<-site.trt.mean%>%
   dplyr::select(-fullclim)%>%
   spread(id, val)
 
-### NMDS/site by burntrt (2019)
-
-ggplot() +
-   #add the species labels
-  geom_point(data=data.scores,aes(x=NMDS1,y=NMDS2,shape=burntrt, color=site,), size=2) + # add the point markers
-    geom_text(data=data.scores,aes(x=NMDS1,y=NMDS2,label=site),size=6,vjust=0) +  # add the site labels
-  scale_colour_manual(values=c("gray50", "gray80", "black")) +
-  scale_shape_manual(values=c(1, 16))+
-  geom_text(data=species.scores,aes(x=NMDS1,y=NMDS2,label=species), size=4) +
-  coord_equal() +
-  theme_bw()+
-  annotate("text",x = site.burn.mean$NMDS1,y = site.burn.mean$NMDS2,label=site.burn.mean$group)+
-  geom_segment(aes(x=arrows$x_NotBurned, y=arrows$y_NotBurned, 
-                   xend=arrows$x_Burned, yend=arrows$y_Burned), 
-               arrow=arrow(length=unit(.3, "cm")), color="red3", size=2)
-
 
 ### NMDS Site x trt (add cluster after)
 ggplot() +
@@ -918,11 +1000,6 @@ ggplot() +
                  arrow = arrow(length = unit(0.25, "cm")),colour="grey70")+
     geom_text(data=species.scores,aes(x=NMDS1,y=NMDS2,label=species), size=4) +
     theme_classic()+xlab("NMDS 1")+ylab("NMDS 2")+theme_classic()  
-  
-  
-  
-
-library(vegan)
 
 wcrel2<-wide_composition%>%
   mutate(totcov=sum(pg, ag, f))%>%
@@ -936,6 +1013,36 @@ wcrel2.5.5<-unique(dplyr::select(data.scores, burntrt, plot, groups))
 newplotkey<-left_join(wcrel2.5, wcrel2.5.5)%>%
   mutate(warmtrt=ifelse(fullclim=="warm"|fullclim=="warmppt", "warm", "ambient"))
      
+
+### NMDS Site x burntrt (add cluster after)
+ggplot() +
+  geom_point(data=data.scores, aes(x=NMDS1,y=NMDS2,shape=burntrt, color=site), size=2) + # add the point markers
+  coord_equal() +
+  scale_colour_manual(values=c("gray50", "gray80", "black")) +
+ # scale_shape_manual(values=c(16, 17, 3, 8))+
+  geom_segment(data=species.scores,aes(x=0,xend=NMDS1,y=0,yend=NMDS2),
+               arrow = arrow(length = unit(0.25, "cm")),colour="grey70")+
+  geom_text(data=species.scores,aes(x=NMDS1,y=NMDS2,label=species), size=4) +
+  theme_classic()+xlab("NMDS 1")+ylab("NMDS 2")+theme_classic()#+
+
+### Figure 4: NMDS/site by burntrt 
+
+#2019
+ggplot() +
+  #add the species labels
+  geom_point(data=data.scores,aes(x=NMDS1,y=NMDS2,shape=burntrt, color=site,), size=2) + # add the point markers
+  scale_colour_manual(values=c("gray50", "gray80", "black")) +
+  scale_shape_manual(values=c(16, 1))+
+  geom_text(data=species.scores,aes(x=NMDS1,y=NMDS2,label=species), size=4) +
+  coord_equal() +
+  theme_classic()+
+  #annotate("text",x = site.burn.mean$NMDS1,y = site.burn.mean$NMDS2,label=site.burn.mean$group)+
+  geom_segment(aes(x=arrows$x_NotBurned, y=arrows$y_NotBurned, 
+                   xend=arrows$x_Burned, yend=arrows$y_Burned), 
+               arrow=arrow(length=unit(.3, "cm")), color="red3", size=2)
+#2020
+
+
 
 ##perMANOVA
 # main effects of site and climate and groups
@@ -971,7 +1078,13 @@ adonis(dplyr::select(filter(wcrNUBdrought_control, id!=51), -1) ~ fullclim, data
 adonis(dplyr::select(wcrCUBdrought_control, -1) ~ fullclim, data=subset(wcrel2.5, site=="central"&burntrt=="NotBurned"&(fullclim=="control"|fullclim=="warmppt")), perm=1e3) # nothing significant
 adonis(dplyr::select(wcrSUBdrought_control, -1) ~ fullclim, data=subset(wcrel2.5, site=="southern"&burntrt=="NotBurned"&(fullclim=="control"|fullclim=="warmppt")), perm=1e3) # nothing significant
 
+#main effects of burn and site interaction 2019
+adonis(wide_composition_rel ~ site*burntrt, data=wcrel2.5, perm=1e3)
 
+#burns by site 2019
+adonis(dplyr::select(filter(wcrN), -1) ~ burntrt, data=subset(wcrel2.5, site=="nortnern"&plot!=51), perm=1e3) 
+adonis(dplyr::select(wcrC, -1) ~ burntrt, data=subset(wcrel2.5, site=="central"), perm=1e3) 
+adonis(dplyr::select(wcrS, -1) ~ burntrt, data=subset(wcrel2.5, site=="southern"), perm=1e3) 
 
 
 ### Figure 3####
@@ -1010,7 +1123,8 @@ riverS<-ggplot(subset(wide_clusters1, site=="southern"), aes(x=burntrt, stratum=
   theme(legend.position = "none", text=element_text(size=15))+xlab("")
 ggarrange(riverN, riverC, riverS, ncol=1, nrow=3)
   
-### Question 2: Figure 4: Timeseries Riverplots
+
+
 ### Question 2: Setup timeseries dataset ####
 
 
@@ -1026,12 +1140,12 @@ timeseries1$func<-factor(timeseries1$func, levels=c("Perennial grasses", "Annual
 
 
 timeseries2s<-timeseries1%>% #vegtog 2s: LRR of burned: not burned by fn group at the microplot level (just lots more replicates)
-  group_by(plot, seedmix, func, burntrt, year)%>%
+  group_by(plot, func, burntrt, year)%>%
   filter(!is.na(cover))%>%
   summarize(cover=mean(cover))%>%
   ungroup()%>%
   mutate(burntrt=ifelse(burntrt=="u", "NotBurned", "Burned"))%>%
-  mutate(id=paste(year, plot, burntrt, seedmix, sep="_"))%>%
+  mutate(id=paste(year, plot, burntrt, sep="_"))%>%
   spread(func, cover)
 
 colnames(timeseries2s)<-c("plot", "seedmix", "burntrt", "year", "id", "pg", "ag", "f", "del", "del2")
@@ -1100,7 +1214,7 @@ ggplot(cluster_char, aes(x=as.factor(groups), y=cover))+geom_boxplot(aes(fill=fg
         axis.ticks.x=element_blank(), legend.title=(element_blank())) +ylab("Microplot % cover")
 
   
-### Question 2: Timeseries riverplots
+#### Question 2: Timeseries riverplots####
 b <- ggplot(subset(wide_clusters1, burntrt=="Burned"), aes(x=as.factor(year), stratum=as.factor(groups), alluvium=id, 
                              fill=as.factor(groups), label=as.factor(groups)))+
     geom_flow()+
@@ -1187,7 +1301,7 @@ ggplot(subset(wide_clusters2, seedmix!="P"&seedmix!="p/c"&seedmix!="f"&seedmix!=
 
 
 
-### Figure 4####
+### old contingency table####
 library(vcd)
 library(DescTools)
 obs.table1<-matrix(c(6, 14, 10, 10, 9, 11), nrow=3, ncol=2, byrow=T)
@@ -1283,6 +1397,74 @@ tsS<-wide_composition_relTS%>%
 wide_composition_relTS<-dplyr::select(wide_composition_relTS, -1)
 
 
+###### riverplot central burned 2019 to 2020 #####
+wcrC19<-wide_compositionTS[27:70,]
+wcrC19<-wcrC19[-c(19, 20, 41, 42),] #get rid of 19, 20, 41, 42
+wcrC20<-wide_compositionTS[120:159,]
+
+ggplot(subset(wide_clusters1, site=="central"), aes(x=burntrt, stratum=groups, alluvium=plot, 
+                                                    fill=groups, label=groups))+
+  geom_flow(width=.5)+
+  scale_x_discrete(expand = c(.1, .1))+
+  geom_stratum(alpha=.5, width=.5)+
+  geom_text(stat="stratum", size=0, min.y=3)+
+  scale_fill_manual(values=c("royalblue3","chartreuse4", "goldenrod2", "tan"))+
+  theme(legend.position = "none")+xlab("")+
+  theme(axis.title.x=element_blank(),axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(), legend.title=(element_blank()), text=element_text(size=15))
+
+
+#make bray-curtis dissimilarity matrix
+wide_dist <- vegdist(rbind(wide_composition_rel, dplyr::select(wcrC20, -1)))
+
+
+x<-hclust(wide_dist, method="complete")
+y<-agnes(wide_dist, method="complete")
+plot(x)
+pltree(y, cex = 0.6, hang = -1, main = "Dendrogram of agnes")
+
+fviz_nbclust(as.matrix(wide_dist), FUN = hcut, method="wss")
+
+groups<-cutree(x, k=4) #change K to change number of clusters
+
+wide_clusters<-cbind(rbind(wide_composition, wcrC20), groups)
+#wide_clusters$id <- row.names(wide_clusters)#%>%
+wide_clusters1<-wide_clusters%>%
+  separate(id, c("plot", "burntrt", "year"))%>%
+  mutate(plot1=ifelse(!is.na(year), burntrt, plot))%>%
+  mutate(burntrt1=ifelse(is.na(year), burntrt, year))%>%
+  mutate(year=ifelse(is.na(year), 2019, plot))%>%
+
+  mutate(plot=as.numeric(plot))%>%
+  mutate(site=ifelse(plot<21, "southern", "central"))%>%
+  mutate(site=ifelse(plot>40, "northern", site))%>%
+  mutate(groups=as.factor(groups))%>%
+#mutate(groups=ifelse(groups==3, "Forbs and Perennials", ifelse(groups==1, "Annuals", "Forbs")))
+wide_clusters1$site<-factor(wide_clusters1$site, levels=c("southern", 
+                                                          "central", 
+                                                          "northern"))
+
+#wide_clusters1$groups<-factor(wide_clusters1$groups, levels=c("Forbs", 
+
+wide_clusters1$burntrt<-factor(wide_clusters1$burntrt, levels=c("NotBurned", "Burned"))
+
+cluster_char<-wide_clusters1%>%
+  gather(fg, cover, ag, pg, f)
+cluster_char$fg<-factor(cluster_char$fg, levels=c("f", "pg", "ag"))
+
+means<-cluster_char%>%
+  group_by(groups, fg)%>%
+  summarize(mean=mean(cover), se=calcSE(cover))
+
+### 2a 
+ggplot(cluster_char, aes(x=groups, y=cover))+geom_boxplot(aes(fill=fg))  +
+  scale_fill_manual(labels=c("forbs", "perennial grasses", "annual grasses"), 
+                    values=c("royalblue3","chartreuse4",  "goldenrod2"))+
+  theme(axis.title.x=element_blank(),
+        axis.ticks.x=element_blank(), legend.title=(element_blank()), text=element_text(size=13)) +ylab("Mean sublot relative cover") + theme_classic()
+
+
+
 # run the NMDS
 plotspecNMDS <- metaMDS(wide_composition_relTS, scale=T)
 #base r plot
@@ -1290,7 +1472,7 @@ plot(plotspecNMDS)
 
 # Extract and format axis scores
 data.scores <- as.data.frame(scores(plotspecNMDS, display=c("sites")))
-data.scores$ID <- row.names(wide_composition_relTS)
+data.scores$ID <- (wide_composition_relTS$id)
 
 data.scores <- as_tibble(data.scores) %>%
   separate(ID, c("year", "plot", "burntrt"), sep="_") %>%
@@ -1325,22 +1507,21 @@ arrows2<-arrows%>%
 
 arrows2019<-subset(arrows,year==2019)
 arrows2020<-subset(arrows,year==2020)
-
-#2019
+ #unsuccessful
+#### FIGURE 4B (2020) ####
 ggplot() +
   theme_classic()+
   # add the species labels
-  geom_point(data=subset(data.scores,year==2019),aes(x=NMDS1,y=NMDS2,shape=site, color=burntrt), size=2) + # add the point markers
-  stat_ellipse(aes(x=data.scores$NMDS1, y=data.scores$NMDS2, color=data.scores$site), type='t',size =.5, linetype=2)+
-  #  geom_text(data=data.scores,aes(x=NMDS1,y=NMDS2,label=site),size=6,vjust=0) +  # add the site labels
-  scale_colour_manual(values=c("brown3","grey50", "grey80",   "dodgerblue","black")) +
-  scale_shape_manual(values=c(15, 16, 17))+
+  geom_point(data=subset(data.scores,year==2019),aes(x=NMDS1,y=NMDS2), color="white", size=0) + # add the point markers
+ # stat_ellipse(aes(x=data.scores$NMDS1, y=data.scores$NMDS2, color=data.scores$site), type='t',size =.5, linetype=2)+
+  scale_colour_manual(values=c("grey60")) +
+  geom_point(data=subset(data.scores,year==2020),aes(x=NMDS1,y=NMDS2,shape=burntrt, color=site), size=2) + # add the point markers
+  scale_shape_manual(values=c(16, 1))+
   geom_text(data=species.scores,aes(x=NMDS1,y=NMDS2,label=species), size=4) +
   coord_equal() +
-  #annotate("text",x = site.burn.mean$NMDS1,y = site.burn.mean$NMDS2,label=site.burn.mean$group)+
   geom_segment(aes(x=arrows2019$x_NotBurned, y=arrows2019$y_NotBurned, 
                    xend=arrows2019$x_Burned, yend=arrows2019$y_Burned), 
-               arrow=arrow(length=unit(.3, "cm")), color="black", size=2)#+
+               arrow=arrow(length=unit(.3, "cm")), color="darkred", size=2)+
   geom_segment(aes(x=0.05216261, y=-0.08951118, 
                    xend=0.14580061, yend=-0.03681127), 
                arrow=arrow(length=unit(.3, "cm")), color="blue3", size=2)
@@ -1379,15 +1560,20 @@ wcrNUB<-wcrNUB%>%
   mutate(newtot=ag+pg+f)%>%
   dplyr::select(-totcov, -newtot)%>%
   ungroup()
+######### permanova 2020########
+wcrC<-rbind(wcrC19, wcrC20)%>%
+  separate(id, into=c(""))
 
 adonis(wide_composition_relTS ~ site+burntrt, data=data.scores, perm=1e3)
 
+
+
 adonis(select(tsN, 4:6) ~ burntrt, data=subset(data.scores, site=="northern"), perm=1e3) # nothing significant
-adonis(select(filter(tsC), 4:6) ~ burntrt+year, data=subset(data.scores, site=="central"), perm=1e3) # nothing significant
+adonis(dplyr::select(filter(tsC, year==2020), 4:6) ~ burntrt, data=subset(data.scores, site=="central"&year==2020), perm=1e3) # nothing significant
 adonis(select(tsS, 4:6) ~ burntrt, data=subset(data.scores, site=="southern"), perm=1e3) # nothing significant
 
 
-######################################
+#######2020 central site old vis and adonis()#########
 #zoom in on central site only
 arrows3<-subset(arrows, site=="central")
 ggplot() +
